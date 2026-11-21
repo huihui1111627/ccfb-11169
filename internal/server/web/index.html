@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>风筝节延时消息调度台</title>
+<style>
+:root{
+  --bg:#0b1220;--panel:#121b2e;--panel2:#0f1727;--line:#22304a;
+  --txt:#dbe6f7;--dim:#8aa0c4;--accent:#4ea1ff;--accent2:#39d98a;
+  --warn:#f5a524;--bad:#ff6b6b;--grid:#1b2740;--grid2:#243456;
+}
+*{box-sizing:border-box}
+body{margin:0;font:14px/1.5 -apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+  background:var(--bg);color:var(--txt)}
+header{display:flex;align-items:center;gap:18px;padding:12px 18px;border-bottom:1px solid var(--line);
+  background:linear-gradient(180deg,#101a2c,#0b1220);position:sticky;top:0;z-index:5;flex-wrap:wrap}
+h1{font-size:16px;margin:0;font-weight:600;letter-spacing:.5px}
+header .clock{font-variant-numeric:tabular-nums;font-size:15px;color:var(--accent)}
+header .muted{color:var(--dim);font-size:12px}
+.bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+button{background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:6px;
+  padding:6px 11px;cursor:pointer;font-size:13px}
+button:hover{border-color:var(--accent);color:#fff}
+button.primary{background:#17457a;border-color:#2f6fbf}
+button.danger{border-color:#5a2430;color:#ffb3b3}
+input,select{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+  border-radius:6px;padding:6px 8px;font-size:13px}
+input[type=number]{width:96px}
+main{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(340px,1fr);gap:16px;padding:16px}
+section{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+section h2{margin:0;font-size:13px;font-weight:600;color:var(--dim);letter-spacing:.6px;
+  padding:10px 14px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;
+  align-items:center;gap:8px;text-transform:uppercase}
+section h2 .pill{background:var(--panel2);border:1px solid var(--line);border-radius:999px;
+  padding:1px 9px;color:var(--txt);font-size:12px;font-weight:500;text-transform:none}
+.body{padding:12px 14px}
+.levels{display:flex;flex-direction:column;gap:12px}
+.level{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--panel2)}
+.level .head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;gap:10px}
+.level .name{font-weight:600}
+.level .meta{color:var(--dim);font-size:12px}
+.slots{display:grid;gap:3px;grid-template-columns:repeat(60,minmax(0,1fr))}
+.slots.h24{grid-template-columns:repeat(24,minmax(0,1fr))}
+.slots.d31{grid-template-columns:repeat(31,minmax(0,1fr))}
+.slots.d60{grid-template-columns:repeat(60,minmax(0,1fr))}
+.slot{height:22px;border-radius:3px;background:var(--grid);border:1px solid #16203a;
+  position:relative;display:flex;align-items:center;justify-content:center;
+  font-size:9px;color:#33456b;font-variant-numeric:tabular-nums;overflow:hidden;cursor:default}
+.slot.filled{border-color:#2f6fbf}
+.slot.heat1{background:#1b3358;color:#9dc4ff}
+.slot.heat2{background:#21518f;color:#dceaff}
+.slot.heat3{background:#2f74c9;color:#fff;border-color:#77b3ff}
+.slot.heat4{background:#4a97ff;color:#04101f;border-color:#a9cdff}
+.slot.now{outline:2px solid var(--accent2);outline-offset:1px}
+.slot .n{font-weight:700;font-size:10px}
+.slot .t{position:absolute;top:1px;left:3px;font-size:8px;opacity:.7}
+.ticks{gap:3px;margin-top:2px}
+.tick{font-size:8.5px;color:#5b7099;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:visible}
+.legend{display:flex;gap:14px;color:var(--dim);font-size:11px;margin-top:8px;flex-wrap:wrap}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #1a2540;white-space:nowrap}
+th{color:var(--dim);font-weight:500;position:sticky;top:0;background:var(--panel);font-size:11.5px}
+td.num{font-variant-numeric:tabular-nums}
+.scroll{max-height:340px;overflow:auto}
+.tag{display:inline-block;border-radius:4px;padding:0 6px;font-size:11px;border:1px solid var(--line)}
+.tag.cal{color:#9ad7ff;border-color:#2b5f8a;background:#102a40}
+.tag.rt{color:#b9f5cf;border-color:#2b6b45;background:#0f2a1c}
+.tag.past{color:#ffd08a;border-color:#6b4a1f;background:#2a1f0f}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(108px,1fr));gap:10px}
+.tile{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 11px}
+.tile .k{color:var(--dim);font-size:11px;letter-spacing:.4px}
+.tile .v{font-size:19px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:2px}
+.tile .v.warn{color:var(--warn)}.tile .v.ok{color:var(--accent2)}
+.empty{color:var(--dim);font-size:12px;padding:10px 0}
+form.inline{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.err{color:var(--bad);font-size:12px;min-height:16px}
+.toast{position:fixed;right:16px;bottom:16px;background:#152238;border:1px solid var(--accent);
+  border-radius:8px;padding:10px 14px;opacity:0;transition:opacity .2s;pointer-events:none;max-width:420px}
+.toast.show{opacity:1}
+.rules .rule{border:1px solid var(--line);border-radius:8px;padding:9px 11px;margin-bottom:8px;background:var(--panel2)}
+.rules .rule .top{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.rules .rule .desc{color:var(--dim);font-size:12px;margin-top:4px}
+.rules .rule .prev{color:#9dc4ff;font-size:11.5px;margin-top:5px;line-height:1.6}
+.sub{color:var(--dim);font-size:11.5px}
+.split{display:grid;grid-template-columns:1fr;gap:16px}
+@media(max-width:1080px){main{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>🪁 风筝节 · 延时消息调度台</h1>
+  <div class="clock" id="clock">—</div>
+  <div class="muted">虚拟时钟（UTC+0 显示）</div>
+  <div class="bar">
+    <button onclick="advance(60)">+1分</button>
+    <button onclick="advance(3600)">+1时</button>
+    <button onclick="advance(86400)">+1天</button>
+    <button onclick="advance(7*86400)">+7天</button>
+    <input type="number" id="advSecs" value="3600" min="1" step="1" title="秒">
+    <button class="primary" onclick="advanceCustom()">拨快</button>
+    <button class="primary" onclick="advanceUntilNext()">拨到下一条</button>
+  </div>
+  <div class="bar" style="margin-left:auto">
+    <span class="muted" id="genAt"></span>
+    <button onclick="load()">刷新</button>
+    <button id="autoBtn" onclick="toggleAuto()">自动刷新: 关</button>
+  </div>
+</header>
+
+<main>
+  <div class="split">
+    <section>
+      <h2>分层时间轮 <span class="pill" id="pendingPill">0 待投递</span></h2>
+      <div class="body">
+        <div class="levels" id="levels"></div>
+        <div class="legend">
+          <span><i style="background:var(--grid)"></i>空格（跳过）</span>
+          <span><i style="background:#1b3358"></i>1–9</span>
+          <span><i style="background:#21518f"></i>10–99</span>
+          <span><i style="background:#2f74c9"></i>100–999</span>
+          <span><i style="background:#4a97ff"></i>1000+</span>
+          <span><i style="background:var(--accent2)"></i>当前格</span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>即将到期 <span class="pill" id="upPill">0</span></h2>
+      <div class="scroll"><table>
+        <thead><tr><th>消息号</th><th>到期（虚拟）</th><th>距现在</th><th>优先级</th><th>类型</th></tr></thead>
+        <tbody id="upcoming"></tbody>
+      </table></div>
+    </section>
+
+    <section>
+      <h2>已投递 <span class="pill" id="histPill">0</span></h2>
+      <div class="scroll"><table>
+        <thead><tr><th>消息号</th><th>到期</th><th>投递时刻</th><th>优先级</th><th>类型</th><th>说明</th></tr></thead>
+        <tbody id="history"></tbody>
+      </table></div>
+    </section>
+  </div>
+
+  <div class="split">
+    <section>
+      <h2>周期规则 <span class="pill" id="rulePill">0</span></h2>
+      <div class="body">
+        <form class="inline" onsubmit="addRule(event)">
+          <input id="rID" placeholder="规则号" size="9" required>
+          <select id="rKind" onchange="syncKind()">
+            <option value="monthly_day">每月第几日</option>
+            <option value="monthly_nth_weekday">每月第几个星期几</option>
+            <option value="monthly_nth_workday">每月第几个工作日</option>
+            <option value="dates">指定日期</option>
+          </select>
+          <span id="kindFields"></span>
+          <input id="rTime" value="09:00" size="5" title="事件时刻 HH:MM">
+          <input id="rOffset" value="-30" size="5" title="提前/推后分钟，负数提前">
+          <button class="primary">新增规则</button>
+        </form>
+        <div class="err" id="ruleErr"></div>
+        <div class="rules" id="rules"></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>统计</h2>
+      <div class="body">
+        <div class="tiles" id="tiles"></div>
+        <div class="legend" style="margin-top:10px">
+          <span>空转跳格 <b id="idlePill">0</b> 次，累计跳过 <b id="idleSecs">0</b></span>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>插入消息（演示用）</h2>
+      <div class="body">
+        <form class="inline" onsubmit="enqueue(event)">
+          <input id="mID" placeholder="消息号（留空自动）" size="16">
+          <input id="mIn" type="number" value="30" min="-3600" step="1" title="相对现在多少秒">
+          <span class="sub">秒后到期</span>
+          <input id="mPrio" type="number" value="0" min="0" step="1" title="同一时刻优先级高者先投">
+          <span class="sub">优先级</span>
+          <input id="mBody" placeholder="内容" size="12">
+          <button class="primary">插入</button>
+        </form>
+        <div class="err" id="enqErr"></div>
+        <form class="inline" onsubmit="cancelMsg(event)" style="margin-top:8px">
+          <input id="cID" placeholder="按消息号取消" size="22">
+          <button class="danger">取消</button>
+        </form>
+        <form class="inline" onsubmit="resched(event)" style="margin-top:8px">
+          <input id="xID" placeholder="按消息号改期" size="14">
+          <input id="xIn" type="number" value="3600" min="-3600" step="1" title="相对现在多少秒">
+          <span class="sub">秒后到期</span>
+          <button>改期</button>
+        </form>
+        <div class="err" id="mutErr"></div>
+      </div>
+    </section>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const NS = 1e9;
+let autoTimer = null;
+
+const fmtDur = ns => {
+  const a = Math.abs(ns);
+  const sign = ns < 0 ? "-" : "";
+  if (a < 1000) return sign + a + "纳秒";
+  if (a < 1e6) return sign + (a/1e3).toFixed(1) + "微秒";
+  if (a < NS) return sign + (a/1e6).toFixed(1) + "毫秒";
+  const s = a / NS;
+  if (s < 90) return sign + s.toFixed(s < 10 ? 2 : 1) + "秒";
+  if (s < 5400) return sign + (s/60).toFixed(1) + "分";
+  if (s < 172800) return sign + (s/3600).toFixed(1) + "时";
+  return sign + (s/86400).toFixed(2) + "天";
+};
+const fmtV = ns => {
+  const d = new Date(ns / 1e6);
+  const p = n => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth()+1)}-${p(d.getUTCDate())} ` +
+         `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
+};
+const fmtVms = ns => {
+  const ms = Math.floor((ns % NS) / 1e6);
+  return fmtV(ns) + "." + String(ms).padStart(3, "0");
+};
+const slotLabel = (start, span) => {
+  const d = new Date(start / 1e6);
+  const p = n => String(n).padStart(2, "0");
+  if (span >= 86400) return `${p(d.getUTCMonth()+1)}/${p(d.getUTCDate())}`;
+  if (span >= 3600) return `${p(d.getUTCDate())} ${p(d.getUTCHours())}时`;
+  if (span >= 60) return `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
+  return `${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}`;
+};
+
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(t._h);
+  t._h = setTimeout(() => t.classList.remove("show"), 2600);
+}
+
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || res.statusText);
+  return body;
+}
+
+let state = null;
+
+async function load() {
+  try {
+    state = await api("/api/state?history=250&upcoming=250");
+    render(state);
+  } catch (e) {
+    toast("刷新失败: " + e.message);
+  }
+}
+
+function heat(n) {
+  if (n >= 1000) return "heat4";
+  if (n >= 100) return "heat3";
+  if (n >= 10) return "heat2";
+  if (n >= 1) return "heat1";
+  return "";
+}
+
+function render(st) {
+  $("clock").textContent = fmtVms(st.now) + " UTC";
+  $("genAt").textContent = "刷新于 " + new Date(st.generated_at/1e6).toLocaleTimeString();
+  $("pendingPill").textContent = st.pending.toLocaleString() + " 待投递";
+
+  // Levels.
+  const wrap = $("levels");
+  wrap.innerHTML = "";
+  st.levels.forEach(lv => {
+    const el = document.createElement("div");
+    el.className = "level";
+    const horizon = lv.horizon_sec;
+    const head = document.createElement("div");
+    head.className = "head";
+    head.innerHTML = `<div><span class="name">${lv.name}</span>
+      <span class="meta"> · ${lv.len} 格 × ${fmtDur(lv.span_sec*NS)} · 覆盖 ${fmtDur(horizon*NS)}</span></div>
+      <div class="meta">${lv.count.toLocaleString()} 条</div>`;
+    el.appendChild(head);
+
+    const grid = document.createElement("div");
+    const cls = lv.len === 24 ? "slots h24" : lv.len === 31 ? "slots d31" : "slots";
+    grid.className = cls;
+    // Slots are drawn as the window of lv.len cells that starts at the cell
+    // containing the virtual clock, so the wheel is shown as the pointer sees
+    // it rather than from the epoch.
+    const spanNS = lv.span_sec * NS;
+    const baseSlot = Math.floor(st.now / spanNS);
+    const bySlot = new Map();
+    lv.buckets.forEach(b => bySlot.set(Math.floor(b.start / spanNS), b));
+    const wide = lv.len <= 31;
+    for (let i = 0; i < lv.len; i++) {
+      const slot = baseSlot + i;
+      const b = bySlot.get(slot);
+      const start = slot * spanNS;
+      const cell = document.createElement("div");
+      cell.className = "slot" + (b ? " filled " + heat(b.count) : "") + (i === 0 ? " now" : "");
+      cell.title = slotLabel(start, lv.span_sec) + (b ? ` · ${b.count} 条` : " · 空");
+      const label = slotLabel(start, lv.span_sec);
+      if (b) {
+        cell.innerHTML = `<span class="n">${b.count >= 1000 ? Math.round(b.count/1000)+"k" : b.count}</span>`;
+        if (wide) cell.innerHTML += `<span class="t">${label}</span>`;
+      } else if (wide) {
+        cell.innerHTML = `<span class="t" style="opacity:.4">${label}</span>`;
+      }
+      grid.appendChild(cell);
+    }
+    if (!wide) {
+      const ticks = document.createElement("div");
+      ticks.className = "ticks";
+      ticks.style.display = "grid";
+      ticks.style.gridTemplateColumns = `repeat(${lv.len}, minmax(0,1fr))`;
+      for (let i = 0; i < lv.len; i++) {
+        const t = document.createElement("div");
+        t.className = "tick";
+        t.textContent = i % 10 === 0 ? slotLabel((baseSlot + i) * spanNS, lv.span_sec) : "";
+        ticks.appendChild(t);
+      }
+      el.appendChild(ticks);
+    }
+    el.appendChild(grid);
+    wrap.appendChild(el);
+  });
+
+  // Upcoming.
+  $("upPill").textContent = st.upcoming.length + " / " + st.pending;
+  const up = $("upcoming");
+  up.innerHTML = st.upcoming.length ? "" : `<tr><td colspan="5" class="empty">没有待投递消息</td></tr>`;
+  st.upcoming.forEach(m => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${esc(m.id)}</td><td class="num">${fmtVms(m.due)}</td>
+      <td class="num">${fmtDur(m.due - st.now)}</td><td class="num">${m.priority}</td>
+      <td>${m.rule ? '<span class="tag cal">周期</span>' : '<span class="tag rt">实时</span>'}</td>`;
+    up.appendChild(tr);
+  });
+
+  // History.
+  $("histPill").textContent = Number(st.stats.delivered).toLocaleString() + " 条";
+  const hist = $("history");
+  hist.innerHTML = st.history.length ? "" : `<tr><td colspan="6" class="empty">还没有投递</td></tr>`;
+  st.history.forEach(m => {
+    const tr = document.createElement("tr");
+    const late = m.at - m.due;
+    tr.innerHTML = `<td>${esc(m.id)}</td><td class="num">${fmtVms(m.due)}</td>
+      <td class="num">${fmtVms(m.at)}</td><td class="num">${m.priority}</td>
+      <td>${m.rule ? '<span class="tag cal">周期</span>' : '<span class="tag rt">实时</span>'}
+          ${m.past_due ? '<span class="tag past">过期补发</span>' : ''}</td>
+      <td class="sub">${m.rule ? esc(m.rule.description || "") : esc(m.payload || "")}
+          ${late > 0 ? `<span class="sub"> · 晚 ${fmtDur(late)}</span>` : ""}</td>`;
+    hist.appendChild(tr);
+  });
+
+  // Rules.
+  $("rulePill").textContent = st.rules.length;
+  const rules = $("rules");
+  rules.innerHTML = st.rules.length ? "" : `<div class="empty">暂无周期规则</div>`;
+  st.rules.forEach(rv => {
+    const r = rv.rule;
+    const el = document.createElement("div");
+    el.className = "rule";
+    const prev = (rv.preview || []).slice(0, 4).map(o => fmtV(o.due)).join(" · ");
+    el.innerHTML = `<div class="top"><b>${esc(r.id)}</b>
+        <button class="danger" onclick="delRule('${esc(r.id)}')">删除</button></div>
+      <div class="desc">${ruleDesc(r)}· 优先级 ${r.priority || 0}</div>
+      <div class="desc">下次活动 ${rv.next ? fmtV(rv.next.due) : "已排完"}
+        ${rv.pending ? ` · 已排入${rv.pending_id ? ' <code>' + esc(rv.pending_id) + '</code>' : ''}` : ""}</div>
+      <div class="prev">${prev}</div>`;
+    rules.appendChild(el);
+  });
+
+  // Stats tiles.
+  const s = st.stats;
+  const idleSecs = s.idle_nanos / NS;
+  $("tiles").innerHTML = [
+    ["已投递", s.delivered, "ok"],
+    ["过期补发", s.past_due, s.past_due ? "warn" : ""],
+    ["入队", s.enqueued, ""],
+    ["取消", s.cancelled, ""],
+    ["改期", s.rescheduled, ""],
+    ["降级次数", s.cascades, ""],
+    ["待投递", st.pending, st.pending ? "warn" : ""],
+  ].map(([k, v, c]) =>
+    `<div class="tile"><div class="k">${k}</div><div class="v ${c}">${Number(v).toLocaleString()}</div></div>`).join("");
+  $("idlePill").textContent = Number(s.idle_jumps).toLocaleString();
+  $("idleSecs").textContent = fmtDur(s.idle_nanos);
+}
+
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, c =>
+    ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+function ruleDesc(r) {
+  const off = r.offset_sec ? `，${r.offset_sec < 0 ? "提前" : "推后"}${fmtDur(Math.abs(r.offset_sec)*NS)}` : "";
+  const miss = r.kind !== "dates" ? `，缺日${r.missing === "clamp" ? "落到月末" : "跳过"}` : "";
+  switch (r.kind) {
+    case "monthly_day": return `每月 ${r.day} 日 ${r.time_of_day}${off}${miss}`;
+    case "monthly_nth_weekday": {
+      const wd = ["日","一","二","三","四","五","六"][r.weekday];
+      const nth = r.nth === -1 ? "最后一个" : "第 " + r.nth + " 个";
+      return `每月${nth}周${wd} ${r.time_of_day}${off}${miss}`;
+    }
+    case "monthly_nth_workday": {
+      const nth = r.nth === -1 ? "最后一个" : "第 " + r.nth + " 个";
+      return `每月${nth}工作日 ${r.time_of_day}${off}${miss}`;
+    }
+    case "dates": return `指定日期 ${(r.dates || []).join(" ")} ${r.time_of_day}${off}`;
+  }
+  return r.kind;
+}
+
+async function advance(secs) {
+  try {
+    await api("/api/advance", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({seconds: secs})});
+    await load();
+    toast("拨快 " + fmtDur(secs*NS));
+  } catch (e) { toast(e.message); }
+}
+function advanceCustom() {
+  const v = Number($("advSecs").value);
+  if (!(v > 0)) return toast("请输入正数秒");
+  advance(v);
+}
+async function advanceUntilNext() {
+  const u = state && state.upcoming[0];
+  if (!u) return toast("没有待投递消息");
+  try {
+    await api("/api/advance", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({until: u.due})});
+    await load();
+    toast("已拨到 " + fmtVms(u.due));
+  } catch (e) { toast(e.message); }
+}
+
+function toggleAuto() {
+  if (autoTimer) {
+    clearInterval(autoTimer); autoTimer = null;
+    $("autoBtn").textContent = "自动刷新: 关";
+  } else {
+    autoTimer = setInterval(load, 2000);
+    $("autoBtn").textContent = "自动刷新: 开";
+  }
+}
+
+async function enqueue(ev) {
+  ev.preventDefault();
+  $("enqErr").textContent = "";
+  try {
+    const body = {
+      id: $("mID").value.trim(),
+      in_sec: Number($("mIn").value),
+      priority: Number($("mPrio").value),
+      payload: $("mBody").value,
+    };
+    await api("/api/enqueue", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify(body)});
+    $("mID").value = ""; $("mBody").value = "";
+    await load(); toast("已插入");
+  } catch (e) { $("enqErr").textContent = e.message; }
+}
+
+async function cancelMsg(ev) {
+  ev.preventDefault();
+  $("mutErr").textContent = "";
+  try {
+    await api("/api/cancel", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({id: $("cID").value.trim()})});
+    $("cID").value = "";
+    await load(); toast("已取消");
+  } catch (e) { $("mutErr").textContent = e.message; }
+}
+
+async function resched(ev) {
+  ev.preventDefault();
+  $("mutErr").textContent = "";
+  try {
+    await api("/api/reschedule", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({id: $("xID").value.trim(), in_sec: Number($("xIn").value), priority: 0})});
+    $("xID").value = "";
+    await load(); toast("已改期");
+  } catch (e) { $("mutErr").textContent = e.message; }
+}
+
+function syncKind() {
+  const k = $("rKind").value;
+  const f = $("kindFields");
+  if (k === "monthly_day") {
+    f.innerHTML = `<input id="rDay" type="number" value="1" min="1" max="31" title="每月第几日">`;
+  } else if (k === "monthly_nth_weekday") {
+    f.innerHTML = `<input id="rNth" type="number" value="1" min="-1" max="5" title="-1 表示最后一个">
+      <select id="rWd"><option value="0">周日</option><option value="1">周一</option>
+      <option value="2">周二</option><option value="3">周三</option><option value="4">周四</option>
+      <option value="5">周五</option><option value="6" selected>周六</option></select>`;
+  } else if (k === "monthly_nth_workday") {
+    f.innerHTML = `<input id="rNth" type="number" value="1" min="-1" max="23" title="-1 表示最后一个工作日">`;
+  } else {
+    f.innerHTML = `<input id="rDates" placeholder="2026-11-24,2026-11-25" size="26">`;
+  }
+  f.innerHTML += ` <select id="rMiss"><option value="skip">缺日跳过</option>
+    <option value="clamp">缺日落月末</option></select>`;
+}
+syncKind();
+
+async function addRule(ev) {
+  ev.preventDefault();
+  $("ruleErr").textContent = "";
+  const k = $("rKind").value;
+  const rule = {
+    id: $("rID").value.trim(),
+    kind: k,
+    time_of_day: $("rTime").value.trim(),
+    offset_sec: Math.round(Number($("rOffset").value) * 60),
+    priority: 1,
+    tz_offset_sec: 8*3600,
+  };
+  if (k === "monthly_day") rule.day = Number($("rDay").value);
+  if (k === "monthly_nth_weekday") { rule.nth = Number($("rNth").value); rule.weekday = Number($("rWd").value); }
+  if (k === "monthly_nth_workday") rule.nth = Number($("rNth").value);
+  if (k === "dates") rule.dates = $("rDates").value.split(",").map(s => s.trim()).filter(Boolean);
+  if (k !== "dates") rule.missing = $("rMiss").value;
+  try {
+    await api("/api/rule", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify(rule)});
+    $("rID").value = "";
+    await load(); toast("规则已新增");
+  } catch (e) { $("ruleErr").textContent = e.message; }
+}
+
+async function delRule(id) {
+  try {
+    await api("/api/rule/delete", {method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({id})});
+    await load(); toast("规则已删除");
+  } catch (e) { toast(e.message); }
+}
+
+load();
+</script>
+</body>
+</html>
